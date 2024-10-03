@@ -1,19 +1,43 @@
-# Report-ExpiringPasswords.PS1
-# Example of how to use the Microsoft Graph PowerShell SDK to generate a password expiration report
-# V1.0 15-Apr-2024
-# https://github.com/12Knocksinna/Office365itpros/blob/master/Report-ExpiringPasswords.PS1
-# See https://office365itpros.com/2024/04/17/password-expiration-report/ for more information
+<#
+.SYNOPSIS
+    Generates a report of user password expiration dates in a Microsoft 365 tenant.
+
+.DESCRIPTION
+    This script connects to Microsoft Graph and retrieves user accounts in the tenant.
+    It checks the tenant's password expiration policy and calculates the password expiration date for each user.
+    The report includes details such as user display name, principal name, department, job title, last sign-in date, days since last sign-in, and days to password expiration.
+    The report is displayed in a grid view and exported to a CSV file.
+
+.NOTES
+    Author: Roy Klooster
+    Date: 03-10-2024
+    Version: 1.1
+    v1.0 - Initial release
+    v1.1 - made some slight adjustments for auditing purposes
+
+    Link to article: https://github.com/12Knocksinna/Office365itpros/blob/master/Report-ExpiringPasswords.PS1
+
+.EXAMPLE
+    .\Report-ExpiringPasswords.ps1
+    This will generate a report of user password expiration dates for the current tenant.
+#>
+
 
 [datetime]$RunDate = Get-Date
 [string]$ReportRunDate = Get-Date ($RunDate) -Format 'dd-MMM-yyyy HH:mm'
 $Version = "1.0"
-$ReportTitle = "Password Expiration Report"
-$CSVOutputFile = "c:\temp\PasswordExpirationReport.CSV"
-$HtmlReportFile = "c:\temp\PasswordExpirationReport.html"
 
 # Connect to Microsoft Graph - the first three scopes can be replaced by Directory.Read.All. The AuditLog.Read.All
 # scope is needed to read the last sign-in date for each account
-#Connect-MgGraph -Scopes Domain.Read.All, User.Read.All, Organization.Read.All, AuditLog.Read.All -NoWelcome
+Connect-MgGraph -Scopes Domain.Read.All, User.Read.All, Organization.Read.All, AuditLog.Read.All -NoWelcome
+
+# Get the organization name
+$OrgName = (Get-MgOrganization).DisplayName
+
+# Set the output file names
+$ReportTitle = "Password Expiration Report"
+$CSVOutputFile = "$pwd\$OrgName-Audit-PasswordExpirationReport.CSV"
+$HtmlReportFile = "$pwd\$OrgName-Audit-PasswordExpirationReport.html"
 
 # Check what the tenant password expiration policy is
 [array]$Domains = Get-MgDomain
@@ -29,12 +53,11 @@ Else {
     Write-Host ("Password expiration is set to {0} days" -f $PasswordLifetime)
     $TenantPasswordExpirationDisabled = $false
 }
-$OrgName = (Get-MgOrganization).DisplayName
  
-# Find licensed member accounts
-Write-Host "Finding licensed user accounts..."
+# Find member accounts
+Write-Host "Finding user accounts..."
 #[Array]$Users = Get-MgUser -Filter "assignedLicenses/`$count ne 0 and userType eq 'Member'"  
-[Array]$Users = Get-MgUser -Filter "assignedLicenses/`$count ne 0 and userType eq 'Member'"  `
+[Array]$Users = Get-MgUser `
     -ConsistencyLevel eventual -CountVariable Records -All `
     -Property id, displayName, userPrincipalName, country, department, assignedlicenses, jobTitle, accountenabled, `
     licenseAssignmentStates, createdDateTime, signInActivity, companyName, passwordpolicies, lastPasswordChangeDateTime |  `
@@ -43,35 +66,31 @@ Write-Host "Finding licensed user accounts..."
 # Extract Information about each user
 $Report = [System.Collections.Generic.List[Object]]::new()
 ForEach ($User in $Users) {
-    $DisabledPasswordExpiry = $false; $WarningMessage = $null
+    $DisabledPasswordExpiry = $false
     Write-Host ("Checking {0}" -f $User.DisplayName)
     # Check if the user account password policy disables password expiration
     If ($User.PasswordPolicies -like "*DisablePasswordExpiration*") {
         $DisabledPasswordExpiry = $true
     }
     # Calculate the password expiry date
-    [datetime]$PasswordExpiryDate = $User.lastPasswordChangeDateTime.AddDays($PasswordLifetime)
+    [datetime]$PasswordExpiryDate = if ($null -ne $User.LastPasswordChangeDateTime) { $User.LastPasswordChangeDateTime.AddDays($PasswordLifetime) } else { [datetime]::MinValue }
     # Calculate the number of days to password expiration
     $DaystoExpiration = ($PasswordExpiryDate - (Get-Date)).Days
-    $DaysSinceLastSignIn = ((Get-Date) - $User.SignInActivity.LastSignInDateTime).Days
-
-    If ($DaystoExpiration -lt 30) {
-        $WarningMessage = ("Password expires in {0} days" -f $DaystoExpiration)
-    }
- 
+    $DaysSinceLastSignIn = if ($null -ne $User.SignInActivity.LastSignInDateTime) { ((Get-Date) - $User.SignInActivity.LastSignInDateTime).Days } else { [int]::MaxValue }
+    
     $ReportLine = [PSCustomObject][Ordered]@{
-        UserDisplayName                    = $User.DisplayName
-        UserPrincipalName                  = $User.UserPrincipalName
-        Department                         = $User.Department
-        'Job title'                        = $User.JobTitle
-        'Last sign in'                     = Get-Date ($User.SignInActivity.LastSignInDateTime) -Format 'dd-MMM-yyyy HH:mm:ss'
-        'Days since sign in'               = $DaysSinceLastSignIn
-        'Password last changed'            = Get-Date ($User.LastPasswordChangeDateTime) -Format 'dd-MMM-yyyy HH:mm:ss'
-        PasswordExpiryDate                 = Get-Date ($PasswordExpiryDate) -Format 'dd-MMM-yyyy HH:mm:ss'
-        DaysToExpiration                   = $DaystoExpiration
-        'Account Password Expiry Disabled' = $DisabledPasswordExpiry
-        'Account enabled'                  = $User.AccountEnabled
-        Status                             = $WarningMessage
+        UserId                  = $User.Id
+        UserDisplayName         = $User.DisplayName
+        UserPrincipalName       = $User.UserPrincipalName
+        Department              = $User.Department
+        'Job title'             = $User.JobTitle
+        'Last sign in'          = if ($null -ne $User.SignInActivity.LastSignInDateTime) { Get-Date ($User.SignInActivity.LastSignInDateTime) -Format 'dd-MMM-yyyy HH:mm:ss' } else { "" }
+        'Days since sign in'    = $DaysSinceLastSignIn
+        'Password last changed' = Get-Date ($User.LastPasswordChangeDateTime) -Format 'dd-MMM-yyyy HH:mm:ss'
+        #PasswordExpiryDate                 = Get-Date ($PasswordExpiryDate) -Format 'dd-MMM-yyyy HH:mm:ss'
+        DaysToExpiration        = $DaystoExpiration
+        #'Account Password Expiry Disabled' = $DisabledPasswordExpiry
+        'Account enabled'       = $User.AccountEnabled
     }
     $Report.Add($ReportLine)
 }

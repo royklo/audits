@@ -1,10 +1,44 @@
-#Requires -Version 3.0
-#The script requires the following permissions:
-#    Directory.Read.All (required)
-#    RoleManagement.Read.Directory (optional, needed to retrieve PIM eligible role assignments)
-#    PrivilegedEligibilitySchedule.Read.AzureADGroup (optional, needed to retrieve Privileged Access Group assignments)
+<#
+.SYNOPSIS
+    Generates a report of administrative role assignments in a Microsoft 365 tenant, including optional PIM eligible and Privileged Access Group assignments.
 
-#For details on what the script does and how to run it, check: https://www.michev.info/blog/post/5958/reporting-on-ent…ts-including-pim
+.DESCRIPTION
+    This script connects to Microsoft Graph and retrieves all administrative role assignments in the tenant.
+    It can optionally include Privileged Identity Management (PIM) eligible role assignments and Privileged Access Group (PAG) assignments.
+    The script checks for the necessary permissions and scopes, collects role assignments, and outputs detailed information about each role assignment.
+
+.PARAMETER IncludePIMEligibleAssignments
+    Indicates whether to include PIM eligible role assignments in the output.
+
+.PARAMETER IncludePAGAssignments
+    Indicates whether to include Privileged Access Group assignments in the output.
+
+.NOTES
+    Author: Roy Klooster
+    Date: 03-10-2024
+    Version: 1.1
+    Version history: 
+        1.0 - Written by the developer Michev.info
+        1.1 - Added some slight adjustments to match the output for auditing
+
+    The script requires the following permissions:
+    Directory.Read.All (required)
+    RoleManagement.Read.Directory (optional, needed to retrieve PIM eligible role assignments)
+    PrivilegedEligibilitySchedule.Read.AzureADGroup (optional, needed to retrieve Privileged Access Group assignments)
+
+    For details on what the script does and how to run it, check: https://www.michev.info/blog/post/5958/reporting-on-ent…ts-including-pim
+
+.EXAMPLE
+    .\Report-AdminRolesAssignments.ps1
+    This will generate a report of all administrative role assignments in the tenant.
+
+    .\Report-AdminRolesAssignments.ps1 -IncludePIMEligibleAssignments
+    This will generate a report including PIM eligible role assignments.
+
+    .\Report-AdminRolesAssignments.ps1 -IncludePAGAssignments
+    This will generate a report including Privileged Access Group assignments.
+#>
+
 
 [CmdletBinding()] #Make sure we can use -Verbose
 Param([switch]$IncludePIMEligibleAssignments, #Indicate whether to include PIM elibigle role assignments in the output.
@@ -31,6 +65,9 @@ catch { throw $_ }
 $CurrentScopes = (Get-MgContext).Scopes
 if ($RequiredScopes | Where-Object { $_ -notin $CurrentScopes }) { Write-Error "The access token does not have the required permissions, rerun the script and consent to the missing scopes!" -ErrorAction Stop }
 #endregion Authentication
+
+# Get Tenant Name
+$tenantname = (Get-MgOrganization).DisplayName
 
 #region Roles
 Write-Verbose "Collecting role assignments..."
@@ -148,8 +185,12 @@ foreach ($role in $roles) {
 #endregion Output
 
 #format and export
-$report | Sort-Object PrincipalType | Format-Table -AutoSize #| Export-CSV -nti -Path "$((Get-Date).ToString('yyyy-MM-dd_HH-mm-ss'))_AzureADRoleInventory.csv"
-Write-Verbose "Output exported to $($PWD)\$((Get-Date).ToString('yyyy-MM-dd_HH-mm-ss'))_AzureADRoleInventory.csv"
+$path = "$($pwd)\$tenantname-Audit-AzureADRoleInventory.csv"
+$report | Sort-Object PrincipalType | Export-Csv -Path $path -NoTypeInformation -Encoding UTF8
+Write-Output "Output exported to $path"
+
+#Disconnect from the Graph API
+#Disconnect-MgGraph
 
 #LIST all PAG
 #Connect-MgGraph -Scopes PrivilegedAccess.Read.AzureADGroup
