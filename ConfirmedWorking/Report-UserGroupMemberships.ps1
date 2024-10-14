@@ -51,6 +51,7 @@ $Report = $Report | Sort-Object GroupName
 
 $path = "$($pwd)\$tenantname-Audit-UserGroupMemberships.csv"
 $Report | Export-Csv -Path $path -NoTypeInformation -Encoding UTF8 
+Write-Host "Report saved to $path"
 
 Disconnect-MgGraph
 

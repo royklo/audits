@@ -132,7 +132,7 @@ function Get-AllDeviceData {
             Customer                   = $TenantName
             DeviceName                 = $DeviceProperties.DeviceName
             DeviceOwnership            = $DeviceProperties.ManagedDeviceOwnerType
-            PrimaryUser                = $DeviceProperties.UserPrincipalName
+            PrimaryUser                = if ($DeviceProperties.UserPrincipalName) { $DeviceProperties.UserPrincipalName } else { "None" }
             Serialnumber               = $DeviceProperties.SerialNumber
             DeviceManufacturer         = $DeviceProperties.Manufacturer
             DeviceModel                = $DeviceProperties.Model
@@ -152,7 +152,7 @@ function Get-AllDeviceData {
             DeviceEnrollmentType       = $DeviceProperties.DeviceEnrollmentType 
             #BitlockerRecovery      = Not yet possible only user auth flow.
             #usersLoggedOnIds           = $DeviceProperties.usersLoggedOn.userId | Select-Object -Unique
-            usersLoggedOnIds           = $($ExistingLoggedInUsers).split(",") -join ', '
+            usersLoggedOnIds           = if ($ExistingLoggedInUsers) { $ExistingLoggedInUsers -join ', ' } else { "" }
             usersLoggedOnCount         = ($DeviceProperties.usersLoggedOn.userId | Select-Object -Unique).count
             Operatingsystem            = $DeviceProperties.OperatingSystem
             OperatingSystemVersion     = $DeviceProperties.OSVersion

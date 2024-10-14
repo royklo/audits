@@ -79,18 +79,19 @@ ForEach ($User in $Users) {
     $DaysSinceLastSignIn = if ($null -ne $User.SignInActivity.LastSignInDateTime) { ((Get-Date) - $User.SignInActivity.LastSignInDateTime).Days } else { [int]::MaxValue }
     
     $ReportLine = [PSCustomObject][Ordered]@{
-        UserId                  = $User.Id
-        UserDisplayName         = $User.DisplayName
-        UserPrincipalName       = $User.UserPrincipalName
-        Department              = $User.Department
-        'Job title'             = $User.JobTitle
-        'Last sign in'          = if ($null -ne $User.SignInActivity.LastSignInDateTime) { Get-Date ($User.SignInActivity.LastSignInDateTime) -Format 'dd-MMM-yyyy HH:mm:ss' } else { "" }
-        'Days since sign in'    = $DaysSinceLastSignIn
-        'Password last changed' = Get-Date ($User.LastPasswordChangeDateTime) -Format 'dd-MMM-yyyy HH:mm:ss'
+        UserId                            = $User.Id
+        UserDisplayName                   = $User.DisplayName
+        UserPrincipalName                 = $User.UserPrincipalName
+        Department                        = $User.Department
+        'Job title'                       = $User.JobTitle
+        'Last sign in'                    = if ($null -ne $User.SignInActivity.LastSignInDateTime) { Get-Date ($User.SignInActivity.LastSignInDateTime) -Format 'dd-MMM-yyyy HH:mm:ss' } else { "" }
+        'Days since sign in'              = $DaysSinceLastSignIn
+        'Password last changed'           = Get-Date ($User.LastPasswordChangeDateTime) -Format 'dd-MMM-yyyy HH:mm:ss'
+        'Days since last password change' = if ($null -ne $User.LastPasswordChangeDateTime) { ((Get-Date) - $User.LastPasswordChangeDateTime).Days } else { "" }
         #PasswordExpiryDate                 = Get-Date ($PasswordExpiryDate) -Format 'dd-MMM-yyyy HH:mm:ss'
-        DaysToExpiration        = $DaystoExpiration
+        DaysToExpiration                  = $DaystoExpiration
         #'Account Password Expiry Disabled' = $DisabledPasswordExpiry
-        'Account enabled'       = $User.AccountEnabled
+        'Account enabled'                 = $User.AccountEnabled
     }
     $Report.Add($ReportLine)
 }
